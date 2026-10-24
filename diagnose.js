@@ -7,20 +7,20 @@ const caps = require('./lib/capabilities');
 
 (async () => {
   const tokenFile = process.env.LG_THINQ_TOKEN_FILE;
-  if (!tokenFile) throw new Error('請設定 LG_THINQ_TOKEN_FILE，指向只包含 PAT 的文字檔。');
+  if (!tokenFile) throw new Error('Set LG_THINQ_TOKEN_FILE to a text file containing only the PAT.');
   const idFile = `${tokenFile}.diagnostic-client-id`;
   let id;
   try { id = fs.readFileSync(idFile, 'utf8').trim(); }
   catch (e) { if (e.code !== 'ENOENT') throw e; id = randomUUID(); fs.writeFileSync(idFile, id, { mode: 0o600 }); }
   const client = new ThinQClient({ tokenFile }, id);
   const devices = (await client.list()).filter(d => d.deviceInfo?.deviceType === 'DEVICE_DEHUMIDIFIER');
-  console.log(`找到 ${devices.length} 台除濕機。以下識別碼只供本機設定，分享前請遮蔽。`);
+  console.log(`Found ${devices.length} dehumidifier(s). The IDs below are for local config only; mask them before sharing.`);
   const results = [];
   for (const device of devices) {
-    console.log(`設備識別碼：${device.deviceId}`);
+    console.log(`Device ID: ${device.deviceId}`);
     const profile = await client.profile(device.deviceId);
     const state = await client.state(device.deviceId);
-    // 輸出僅允許列出的功能欄位，不包含裝置 ID、別名、PAT 或 MQTT 憑證。
+    // Output only the listed capability fields; no device ID, alias, PAT, or MQTT certificate.
     results.push({
       model: device.deviceInfo.modelName,
       capabilities: Object.fromEntries(Object.keys(caps.paths).map(k => [k, caps.property(profile, k)])),
@@ -32,5 +32,5 @@ const caps = require('./lib/capabilities');
   }
   const output = path.resolve('lg-thinq-diagnostic.json');
   fs.writeFileSync(output, JSON.stringify(results, null, 2) + '\n', { mode: 0o600 });
-  console.log(`已寫入 ${output}；本次只有讀取設備資料，沒有控制家電。`);
+  console.log(`Wrote ${output}; this run only read device data and did not control any appliance.`);
 })().catch(e => { console.error(e.message); process.exitCode = 1; });

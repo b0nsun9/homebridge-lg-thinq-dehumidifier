@@ -1,3 +1,3 @@
-# 程式庫
+# Library
 
-此目錄包含設備能力解析、LG API 連線與滿水事件接收模組。
+This directory holds the device-capability parsing, the LG API client, and the water-full event receiver modules.

@@ -23,8 +23,8 @@ function state() { return { operation: { dehumidifierOperationMode: 'POWER_ON' }
 const log = { info() {}, warn() {}, error() {} };
 function setup(p = profile()) {
   const platform = { api: { hap }, config: {}, log, interval: 120000, client: { state: async () => state(), control: async () => {} } };
-  const accessory = new hap.Accessory('測試除濕機', hap.uuid.generate('unit-test'));
-  const device = new Device(platform, accessory, { deviceId: 'test-id', deviceInfo: { modelName: '測試模型' } }, p);
+  const accessory = new hap.Accessory('Test Dehumidifier', hap.uuid.generate('unit-test'));
+  const device = new Device(platform, accessory, { deviceId: 'test-id', deviceInfo: { modelName: 'Test Model' } }, p);
   return { device, accessory, platform };
 }
 
@@ -46,9 +46,9 @@ test('new three five seven hour switches and saved old defaults send native hour
   const sent = []; platform.client.control = async (_id, payload) => sent.push(payload);
   platform.client.state = async () => ({ ...state(), sleepTimer: { relativeStopTimer: 'UNSET' } });
   await device.refresh();
-  for (const [hour, label] of [[3, '三'], [5, '五'], [7, '七']]) {
+  for (const hour of [3, 5, 7]) {
     const s = accessory.getServiceById(hap.Service.Switch, `native-sleep-timer:${hour}`);
-    assert.equal(s.getCharacteristic(hap.Characteristic.ConfiguredName).value, `除濕機定時${label}小時`);
+    assert.equal(s.getCharacteristic(hap.Characteristic.ConfiguredName).value, `Dehumidifier Timer ${hour}h`);
     await s.getCharacteristic(hap.Characteristic.On).handleSetRequest(true);
   }
   assert.deepEqual(sent, [3, 5, 7].map(relativeHourToStop => ({ sleepTimer: { relativeHourToStop } })));
@@ -82,19 +82,19 @@ test('generic Siri timer switch can start a default duration and uniquely named 
   await accessory.getServiceById(hap.Service.Switch, 'native-sleep-timer').getCharacteristic(hap.Characteristic.On).handleSetRequest(true);
   assert.deepEqual(sent, [{ sleepTimer: { relativeHourToStop: 1 } }]);
   const preset = accessory.getServiceById(hap.Service.Switch, 'native-sleep-timer:1');
-  assert.equal(preset.getCharacteristic(hap.Characteristic.ConfiguredName).value, '除濕機定時一小時');
-  assert.equal(accessory.getServiceById(hap.Service.Switch, 'native-sleep-timer').getCharacteristic(hap.Characteristic.ConfiguredName).value, '除濕機定時');
+  assert.equal(preset.getCharacteristic(hap.Characteristic.ConfiguredName).value, 'Dehumidifier Timer 1h');
+  assert.equal(accessory.getServiceById(hap.Service.Switch, 'native-sleep-timer').getCharacteristic(hap.Characteristic.ConfiguredName).value, 'Dehumidifier Timer');
 });
 test('simple Siri switch uses configured duration and migrates old defaults while preserving custom names', async t => {
   const { device, accessory, platform } = setup(sleepProfile()); t.after(() => device.stop());
   const old = accessory.getServiceById(hap.Service.Switch, 'native-sleep-timer');
-  old.setCharacteristic(hap.Characteristic.Name, 'LG 除濕機定時').setCharacteristic(hap.Characteristic.ConfiguredName, 'LG 除濕機定時');
+  old.setCharacteristic(hap.Characteristic.Name, 'LG Dehumidifier Timer').setCharacteristic(hap.Characteristic.ConfiguredName, 'LG Dehumidifier Timer');
   const preset = accessory.getServiceById(hap.Service.Switch, 'native-sleep-timer:1');
-  preset.setCharacteristic(hap.Characteristic.ConfiguredName, '我的一小時');
+  preset.setCharacteristic(hap.Characteristic.ConfiguredName, 'My 1 Hour');
   platform.config.nativeTimerDefaultHours = 2;
   const restored = new Device(platform, accessory, device.info, device.profile); t.after(() => restored.stop());
-  assert.equal(old.getCharacteristic(hap.Characteristic.ConfiguredName).value, '除濕機定時');
-  assert.equal(preset.getCharacteristic(hap.Characteristic.ConfiguredName).value, '我的一小時');
+  assert.equal(old.getCharacteristic(hap.Characteristic.ConfiguredName).value, 'Dehumidifier Timer');
+  assert.equal(preset.getCharacteristic(hap.Characteristic.ConfiguredName).value, 'My 1 Hour');
   const sent = []; platform.client.control = async (_id, payload) => sent.push(payload);
   platform.client.state = async () => ({ ...state(), sleepTimer: { relativeStopTimer: 'UNSET' } });
   await restored.refresh(); await old.getCharacteristic(hap.Characteristic.On).handleSetRequest(true);
@@ -102,7 +102,7 @@ test('simple Siri switch uses configured duration and migrates old defaults whil
 });
 test('upgrade removes separated power switch and retains 0.1.4 primary Active control', async t => {
   const { device, accessory, platform } = setup(sleepProfile()); t.after(() => device.stop());
-  accessory.addService(hap.Service.Switch, 'LG 除濕機電源', 'power-control');
+  accessory.addService(hap.Service.Switch, 'LG Dehumidifier Power', 'power-control');
   const restored = new Device(platform, accessory, device.info, device.profile); t.after(() => restored.stop());
   assert.equal(accessory.getServiceById(hap.Service.Switch, 'power-control'), undefined);
   const main = accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main');
@@ -197,13 +197,13 @@ test('native timer cache upgrade removes legacy reservation switches and preserv
   assert.equal(cached.UUID, accessory.UUID);
 });
 
-test('濕度範圍、刻度、例外值與模式均依能力檢查', () => {
+test('capability checks for humidity range, step, exceptions, and mode', () => {
   assert.deepEqual(caps.command(profile(), 'target', 55), { humidity: { targetHumidity: 55 } });
   for (const value of [29, 71, 52, 65, NaN, '55']) assert.throws(() => caps.command(profile(), 'target', value));
   assert.throws(() => caps.command(profile(), 'mode', 'UNKNOWN'));
   assert.throws(() => caps.command(profile(), 'current', 50));
 });
-test('端點區域依設定國家決定、每次不同訊息 ID、正確控制標頭與解包', async () => {
+test('endpoint region comes from the configured country, unique message IDs, correct control headers and unwrap', async () => {
   const requests = [];
   const client = new ThinQClient({ token: 'test-secret', country: 'nz' }, 'unique-client', async (url, options) => {
     requests.push({ url, options }); return new Response(JSON.stringify({ response: { ok: true } }));
@@ -215,7 +215,7 @@ test('端點區域依設定國家決定、每次不同訊息 ID、正確控制�
   assert.equal(requests[0].options.headers['x-conditional-control'], 'true');
   assert.notEqual(requests[0].options.headers['x-message-id'], requests[1].options.headers['x-message-id']);
 });
-test('國家代碼對應正確區域主機，缺少或不支援的代碼會被拒絕', async () => {
+test('country code maps to the right region host; missing or unsupported codes are rejected', async () => {
   const hostFor = async country => {
     let seen;
     const client = new ThinQClient({ token: 't', country }, 'id', async url => { seen = url; return new Response(JSON.stringify({ response: {} })); });
@@ -226,19 +226,19 @@ test('國家代碼對應正確區域主機，缺少或不支援的代碼會被�
   assert.equal(await hostFor('TW'), 'https://api-kic.lgthinq.com/devices');
   assert.equal(await hostFor('US'), 'https://api-aic.lgthinq.com/devices');
   assert.equal(await hostFor('DE'), 'https://api-eic.lgthinq.com/devices');
-  assert.throws(() => new ThinQClient({ token: 't' }, 'id'));                 // 缺少國家
-  assert.throws(() => new ThinQClient({ token: 't', country: 'ZZ' }, 'id'));   // 不支援的國家
-  assert.throws(() => new ThinQClient({ token: 't', country: 'NZL' }, 'id'));  // 非兩碼
+  assert.throws(() => new ThinQClient({ token: 't' }, 'id'));                 // missing country
+  assert.throws(() => new ThinQClient({ token: 't', country: 'ZZ' }, 'id'));   // unsupported country
+  assert.throws(() => new ThinQClient({ token: 't', country: 'NZL' }, 'id'));  // not two letters
 });
-test('API 錯誤不洩漏伺服器文字或權杖，並退避限流', async () => {
+test('API errors do not leak server text or the token, and rate-limit backs off', async () => {
   let count = 0;
   const client = new ThinQClient({ token: 'secret', country: 'NZ' }, 'id', async () => {
     count++; return new Response(JSON.stringify({ error: { code: '1306', message: 'secret' } }), { status: 429 });
   });
   await assert.rejects(client.list(), e => e.code === '1306' && !e.message.includes('secret'));
-  await assert.rejects(client.list(), /限流/); assert.equal(count, 1);
+  await assert.rejects(client.list(), /rate-limited/); assert.equal(count, 1);
 });
-test('真實 HAP 服務可建立，未知、過期、離線濕度不會回報零', async t => {
+test('real HAP services build; unknown, stale, or offline humidity never reports zero', async t => {
   const { device, accessory, platform } = setup(); t.after(() => device.stop());
   assert.throws(() => device.humidity('current'));
   await device.refresh(); assert.equal(device.humidity('current'), 63);
@@ -246,28 +246,28 @@ test('真實 HAP 服務可建立，未知、過期、離線濕度不會回報零
   assert.ok(service);
   assert.deepEqual(service.getCharacteristic(hap.Characteristic.TargetHumidifierDehumidifierState).props.validValues, [2]);
   device.lastUpdate = Date.now() - 400000; assert.throws(() => device.power());
-  platform.client.state = async () => { throw new Error('離線'); };
+  platform.client.state = async () => { throw new Error('offline'); };
   await assert.rejects(device.refresh()); assert.throws(() => device.humidity('current'));
 });
-test('控制序列化，失敗不阻擋下一指令，也不捏造新狀態', async t => {
+test('control is serialized; a failure does not block the next command or fabricate state', async t => {
   const { device, platform } = setup(); t.after(() => device.stop()); await device.refresh();
   const received = []; let running = 0;
   platform.client.control = async (_id, payload) => {
     assert.equal(running++, 0); await new Promise(resolve => setImmediate(resolve));
-    received.push(payload); running--; if (received.length === 1) throw new Error('拒絕');
+    received.push(payload); running--; if (received.length === 1) throw new Error('rejected');
   };
   const results = await Promise.allSettled([device.write('target', 45), device.write('target', 55)]);
   assert.equal(results[0].status, 'rejected'); assert.equal(results[1].status, 'fulfilled');
   assert.equal(device.humidity('target'), 50); assert.equal(received.length, 2);
 });
-test('模式與風速開關只選擇有效選項，關閉不會誤關主機', async t => {
+test('mode and fan switches select only valid options; turning one off does not power down the unit', async t => {
   const { device, accessory, platform } = setup(); t.after(() => device.stop()); await device.refresh();
   const received = []; platform.client.control = async (_id, payload) => received.push(payload);
   const mode = accessory.getServiceById(hap.Service.Switch, 'mode:CLOTHES_DRY').getCharacteristic(hap.Characteristic.On);
   await assert.rejects(mode.handleSetRequest(false)); assert.equal(received.length, 0);
   await mode.handleSetRequest(true); assert.deepEqual(received[0], { dehumidifierJobMode: { currentJobMode: 'CLOTHES_DRY' } });
 });
-test('滿水事件只接受目標設備，十秒後結束事件而非宣稱水箱已空', t => {
+test('water-full event accepts only the target device and ends after ten seconds instead of claiming the tank is empty', t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const { device } = setup(); t.after(() => device.stop()); device.pushStatus(true);
   device.message({ deviceId: 'other', pushCode: 'WATER_IS_FULL' }); assert.equal(device.eventActive, false);
@@ -276,14 +276,14 @@ test('滿水事件只接受目標設備，十秒後結束事件而非宣稱水�
   device.pushStatus(false);
   assert.equal(device.notification.getCharacteristic(hap.Characteristic.StatusFault).value, 1);
 });
-test('缺少滿水能力不建立感測器；缺少目標濕度退回開關', t => {
+test('no water-full capability creates no sensor; no target humidity falls back to a switch', t => {
   const p = profile(); delete p.notification; delete p.property.humidity.targetHumidity;
   const { device, accessory } = setup(p); t.after(() => device.stop());
   assert.equal(device.notification, undefined);
   assert.equal(accessory.getService(hap.Service.HumidifierDehumidifier), undefined);
   assert.ok(accessory.getServiceById(hap.Service.Switch, 'power'));
 });
-test('快取配件恢復後保留識別資訊並重新綁定服務', async t => {
+test('a restored cached accessory keeps its identity and rebinds services', async t => {
   const { device, accessory } = setup(); t.after(() => device.stop());
   const api = new EventEmitter(); api.hap = hap;
   const platform = new Platform(log, {}, api); platform.configureAccessory(accessory);
@@ -291,7 +291,7 @@ test('快取配件恢復後保留識別資訊並重新綁定服務', async t => 
   const restored = new Device(device.platform, accessory, device.info, device.profile); t.after(() => restored.stop());
   await restored.refresh(); assert.equal(restored.humidity('current'), 63);
 });
-test('舊版配件升級補齊控制項名稱，保留全部服務與使用者改名', async t => {
+test('upgrading an old accessory fills control names and keeps all services and user renames', async t => {
   const { device, accessory, platform } = setup(); t.after(() => device.stop());
   const services = accessory.services.filter(s => s.UUID !== hap.Service.AccessoryInformation.UUID);
   assert.equal(services.length, 7);
@@ -301,19 +301,19 @@ test('舊版配件升級補齊控制項名稱，保留全部服務與使用者�
   assert.equal(restoredAccessory.UUID, accessory.UUID);
   assert.deepEqual(restoredAccessory.services.map(s => [s.UUID, s.subtype]), accessory.services.map(s => [s.UUID, s.subtype]));
   assert.deepEqual(restoredAccessory.services.filter(s => s.subtype).map(s => s.getCharacteristic(hap.Characteristic.ConfiguredName).value),
-    ['LG 除濕機', '風速 低速', '風速 高速', '模式 智慧除濕', '模式 衣物乾燥', '水箱滿通知事件', 'LG 除濕機 目前濕度']);
+    ['LG Dehumidifier', 'Fan Low', 'Fan High', 'Mode Smart Dehumidify', 'Mode Clothes Dry', 'Water Tank Full', 'LG Dehumidifier Humidity']);
   const fan = restoredAccessory.getServiceById(hap.Service.Switch, 'fan:LOW');
-  await fan.getCharacteristic(hap.Characteristic.ConfiguredName).handleSetRequest('我的低速');
+  await fan.getCharacteristic(hap.Characteristic.ConfiguredName).handleSetRequest('My Low');
   const again = new Device(platform, restoredAccessory, device.info, device.profile); t.after(() => again.stop());
-  assert.equal(fan.getCharacteristic(hap.Characteristic.ConfiguredName).value, '我的低速');
+  assert.equal(fan.getCharacteristic(hap.Characteristic.ConfiguredName).value, 'My Low');
 });
 
-test('濕度作為主除濕機與感測器輸出，舊配件升級保留控制服務', async t => {
+test('humidity as the main dehumidifier and a sensor output; upgrading an old accessory keeps control services', async t => {
   const p = profile(); delete p.property.humidity.targetHumidity.value.w.except;
   p.property.humidity.currentHumidity.value.r.step = 1;
   p.property.humidity.targetHumidity.value.r = { min: 30, max: 70, step: 5 };
   const { device, accessory, platform } = setup(p); t.after(() => device.stop());
-  // 模擬 0.1.1 配件：未指定主服務，也沒有獨立濕度感測服務。
+  // Simulate a 0.1.1 accessory: no primary service set, and no separate humidity sensor.
   accessory.removeService(accessory.getServiceById(hap.Service.HumiditySensor, 'humidity'));
   accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main').setPrimaryService(false);
   const oldServices = accessory.services.map(s => [s.UUID, s.subtype]);
@@ -334,7 +334,7 @@ test('濕度作為主除濕機與感測器輸出，舊配件升級保留控制�
   assert.deepEqual([target.props.minValue, target.props.maxValue, target.props.minStep], [0, 100, 1]);
   await target.handleSetRequest(55);
   assert.deepEqual(sent, [{ humidity: { targetHumidity: 55 } }]);
-  // 輪詢仍以設備實際值為準，不把目標值當目前濕度。
+  // Polling still uses the device actual value and does not treat the setpoint as current humidity.
   await restored.refresh();
   assert.equal(target.value, 50);
   assert.equal(sensor.getCharacteristic(hap.Characteristic.CurrentRelativeHumidity).value, 59);
@@ -345,16 +345,16 @@ test('濕度作為主除濕機與感測器輸出，舊配件升級保留控制�
   assert.equal(cached.services.filter(s => s.UUID === hap.Service.HumiditySensor.UUID).length, 1);
 });
 
-test('DD201 模式名稱遷移保留識別與自訂名稱，控制仍送出核對過的代碼', async t => {
+test('DD201 mode-name migration keeps identity and custom names; control still sends the verified codes', async t => {
   const p = profile();
   p.property.dehumidifierJobMode.currentJobMode = enumProperty(['AIR_CLEAN', 'QUIET_HUMIDITY', 'RAPID_HUMIDITY', 'INTENSIVE_DRY', 'SMART_HUMIDITY']);
   p.property.airFlow.windStrengthLevel = enumProperty(['AUTO', 'POWER', 'MID', 'LOW', 'HIGH']);
   const { device, accessory, platform } = setup(p); t.after(() => device.stop());
   const air = accessory.getServiceById(hap.Service.Switch, 'mode:AIR_CLEAN');
-  air.setCharacteristic(hap.Characteristic.Name, '模式 選項 1').setCharacteristic(hap.Characteristic.ConfiguredName, '模式 選項 1');
+  air.setCharacteristic(hap.Characteristic.Name, 'Mode Option 1').setCharacteristic(hap.Characteristic.ConfiguredName, 'Mode Option 1');
   const power = accessory.getServiceById(hap.Service.Switch, 'fan:POWER');
-  power.setCharacteristic(hap.Characteristic.Name, '風速 POWER（待核對）').setCharacteristic(hap.Characteristic.ConfiguredName, '風速 POWER（待核對）');
-  accessory.getServiceById(hap.Service.Switch, 'fan:LOW').setCharacteristic(hap.Characteristic.ConfiguredName, '我的低速');
+  power.setCharacteristic(hap.Characteristic.Name, 'Fan POWER (unverified)').setCharacteristic(hap.Characteristic.ConfiguredName, 'Fan POWER (unverified)');
+  accessory.getServiceById(hap.Service.Switch, 'fan:LOW').setCharacteristic(hap.Characteristic.ConfiguredName, 'My Low');
   const before = accessory.services.map(s => [s.UUID, s.subtype]);
   const cached = hap.Accessory.deserialize(hap.Accessory.serialize(accessory));
   const info = { ...device.info, deviceInfo: { modelName: 'DHUM_231006_WW' } };
@@ -362,23 +362,23 @@ test('DD201 模式名稱遷移保留識別與自訂名稱，控制仍送出核�
   const nameOf = subtype => cached.getServiceById(hap.Service.Switch, subtype).getCharacteristic(hap.Characteristic.ConfiguredName).value;
   assert.deepEqual(cached.services.map(s => [s.UUID, s.subtype]), before);
   assert.deepEqual(['SMART_HUMIDITY', 'QUIET_HUMIDITY', 'RAPID_HUMIDITY', 'INTENSIVE_DRY', 'AIR_CLEAN'].map(v => nameOf(`mode:${v}`)),
-    ['模式 智慧除濕 Plus', '模式 靜音除濕', '模式 衣物乾燥', '模式 烘鞋／衣櫥', '模式 自動清潔']);
-  assert.equal(nameOf('fan:LOW'), '我的低速');
-  assert.equal(nameOf('fan:MID'), '風速 中');
-  assert.equal(nameOf('fan:POWER'), '風速 Turbo');
+    ['Mode Smart Dehumidify Plus', 'Mode Quiet Dehumidify', 'Mode Clothes Dry', 'Mode Shoe/Closet Dry', 'Mode Auto Clean']);
+  assert.equal(nameOf('fan:LOW'), 'My Low');
+  assert.equal(nameOf('fan:MID'), 'Fan Medium');
+  assert.equal(nameOf('fan:POWER'), 'Fan Turbo');
   await restored.refresh();
   const sent = []; platform.client.control = async (_id, payload) => sent.push(payload);
   for (const mode of ['RAPID_HUMIDITY', 'INTENSIVE_DRY']) {
     await cached.getServiceById(hap.Service.Switch, `mode:${mode}`).getCharacteristic(hap.Characteristic.On).handleSetRequest(true);
   }
   assert.deepEqual(sent, ['RAPID_HUMIDITY', 'INTENSIVE_DRY'].map(currentJobMode => ({ dehumidifierJobMode: { currentJobMode } })));
-  platform.config.optionNames = { RAPID_HUMIDITY: '曬衣模式' };
+  platform.config.optionNames = { RAPID_HUMIDITY: 'Laundry Mode' };
   const again = new Device(platform, cached, info, p); t.after(() => again.stop());
-  assert.equal(nameOf('mode:RAPID_HUMIDITY'), '模式 曬衣模式');
-  assert.equal(nameOf('fan:LOW'), '我的低速');
+  assert.equal(nameOf('mode:RAPID_HUMIDITY'), 'Mode Laundry Mode');
+  assert.equal(nameOf('fan:LOW'), 'My Low');
 });
 
-test('MQTT 簽發、TLS 及訂閱使用官方協定，錯誤設備事件被過濾', async t => {
+test('MQTT issuance, TLS, and subscription use the official protocol; wrong-device events are filtered', async t => {
   const forge = require('node-forge');
   const { PushConnection } = require('../lib/push');
   const { generateKeyPairSync } = require('node:crypto');
@@ -409,7 +409,7 @@ test('MQTT 簽發、TLS 及訂閱使用官方協定，錯誤設備事件被過�
   assert.equal(messageCount, 1); emitter.emit('offline'); assert.equal(online, false);
 });
 
-test('HomeKit 標準濕度範圍可上下設定，LG 指令仍符合設備刻度', async t => {
+test('HomeKit standard humidity range sets up and down; LG commands still match the device step', async t => {
   const p = profile(); delete p.property.humidity.targetHumidity.value.w.except;
   const { device, accessory, platform } = setup(p); t.after(() => device.stop());
   let actual = 40; const sent = [];
@@ -428,21 +428,21 @@ test('HomeKit 標準濕度範圍可上下設定，LG 指令仍符合設備刻度
 
 function setupWith(config) {
   const platform = { api: { hap }, config, log, interval: 120000, client: { state: async () => state(), control: async () => {} } };
-  const accessory = new hap.Accessory('測試除濕機', hap.uuid.generate(`wf-${config.waterFullSensor || 'default'}`));
-  const device = new Device(platform, accessory, { deviceId: 'test-id', deviceInfo: { modelName: '測試模型' } }, profile());
+  const accessory = new hap.Accessory('Test Dehumidifier', hap.uuid.generate(`wf-${config.waterFullSensor || 'default'}`));
+  const device = new Device(platform, accessory, { deviceId: 'test-id', deviceInfo: { modelName: 'Test Model' } }, profile());
   return { device, accessory, platform };
 }
-test('滿水感測器類型可設定（occupancy、leak），none 則停用', t => {
+test('water-full sensor type is configurable (occupancy, leak); none disables it', t => {
   for (const [choice, svc, ch] of [
     ['contact', hap.Service.ContactSensor, hap.Characteristic.ContactSensorState],
     ['occupancy', hap.Service.OccupancySensor, hap.Characteristic.OccupancyDetected],
     ['leak', hap.Service.LeakSensor, hap.Characteristic.LeakDetected],
   ]) {
     const { device, accessory } = setupWith({ waterFullSensor: choice }); t.after(() => device.stop());
-    assert.ok(device.notification, `${choice} 應建立通知感測器`);
+    assert.ok(device.notification, `${choice} should create a notification sensor`);
     assert.equal(device.notification.UUID, svc.UUID);
     assert.equal(device.waterState, ch);
-    // 選定類型以外的感測器不應存在。
+    // Sensors other than the selected type must not exist.
     for (const other of [hap.Service.ContactSensor, hap.Service.OccupancySensor, hap.Service.LeakSensor]) {
       if (other.UUID !== svc.UUID) assert.equal(accessory.getServiceById(other, 'water-full-event'), undefined);
     }
@@ -457,7 +457,7 @@ test('滿水感測器類型可設定（occupancy、leak），none 則停用', t 
     assert.equal(accessory.getServiceById(svc, 'water-full-event'), undefined);
   }
 });
-test('未知的滿水感測器類型會停用通知而非崩潰', t => {
+test('an unknown water-full sensor type disables the notification instead of crashing', t => {
   const { device } = setupWith({ waterFullSensor: 'banana' }); t.after(() => device.stop());
   assert.equal(device.notification, undefined);
   assert.equal(device.waterState, null);

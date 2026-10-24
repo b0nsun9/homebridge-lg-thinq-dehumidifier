@@ -1,3 +1,3 @@
-# 測試
+# Tests
 
-在專案根目錄執行 npm ci 與 npm test。本機模擬測試不能取代 DD201MWE0 實機驗證。
+Run `npm ci` and `npm test` in the project root. Local simulated tests do not replace real-device verification on a DD201MWE0.

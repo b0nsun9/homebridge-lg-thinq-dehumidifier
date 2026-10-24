@@ -1,7 +1,7 @@
 {
   "name": "homebridge-lg-thinq-dd201",
   "version": "0.1.10",
-  "description": "LG ThinQ 臺灣除濕機 Homebridge 外掛；DD201MWE0 待實機驗證",
+  "description": "Homebridge plugin for LG ThinQ dehumidifiers; configurable region and water-full sensor. DD201MWE0 pending real-device verification.",
   "main": "index.js",
   "keywords": [
     "homebridge-plugin"

@@ -6,59 +6,59 @@
     "type": "object",
     "properties": {
       "name": {
-        "title": "顯示名稱",
+        "title": "Display name",
         "type": "string",
-        "default": "LG 除濕機"
+        "default": "LG Dehumidifier"
       },
       "country": {
-        "title": "國家代碼（兩碼 ISO，決定 LG 伺服器區域）",
-        "description": "依 LG ThinQ 帳號所屬國家填寫，例如 NZ、TW、AU、KR、US、GB。不再寫死；NZ 與 TW 同屬亞太（kic）區。",
+        "title": "Country code (2-letter ISO; sets the LG server region)",
+        "description": "Use your LG ThinQ account's country, e.g. NZ, TW, AU, KR, US, GB. Not hard-coded. NZ and TW are both in the Asia-Pacific (kic) region.",
         "type": "string",
         "default": "NZ",
         "required": true,
         "pattern": "^[A-Za-z]{2}$"
       },
       "tokenFile": {
-        "title": "PAT 權杖檔案的絕對路徑（建議）",
+        "title": "Absolute path to the PAT token file (recommended)",
         "type": "string"
       },
       "token": {
-        "title": "PAT（未使用權杖檔案時填入）",
+        "title": "Personal Access Token (if not using a token file)",
         "type": "string",
         "format": "password"
       },
       "deviceId": {
-        "title": "設備識別碼（有多台除濕機時必填）",
+        "title": "Device ID (required when you have more than one dehumidifier)",
         "type": "string"
       },
       "pollInterval": {
-        "title": "輪詢秒數",
+        "title": "Polling interval (seconds)",
         "type": "integer",
         "minimum": 60,
         "default": 120
       },
       "waterFullSensor": {
-        "title": "滿水通知的感測器類型（Apple 家庭）",
-        "description": "「家庭」只對特定感測器類型推播。開門感測最安靜；漏水感測語意最貼近但 Apple 會升級為緊急警示；none 則不建立通知感測器。通知文字無法在家庭 App 內自訂（只能改感測器名稱）。",
+        "title": "Water-full notification sensor type (Apple Home)",
+        "description": "Apple Home only pushes alerts for certain sensor types. Contact is the quietest; Leak is closest in meaning but Apple raises a Critical Alert; None creates no sensor. The alert wording cannot be customized in the Home app (only the sensor's name).",
         "type": "string",
         "default": "contact",
         "oneOf": [
-          { "title": "開門感測 Contact（最安靜，建議）", "enum": ["contact"] },
-          { "title": "有人感測 Occupancy", "enum": ["occupancy"] },
-          { "title": "漏水感測 Leak（Apple 緊急警示）", "enum": ["leak"] },
-          { "title": "停用滿水通知 None", "enum": ["none"] }
+          { "title": "Contact sensor (quietest, recommended)", "enum": ["contact"] },
+          { "title": "Occupancy sensor", "enum": ["occupancy"] },
+          { "title": "Leak sensor (Apple Critical Alert)", "enum": ["leak"] },
+          { "title": "Disable water-full notification (None)", "enum": ["none"] }
         ]
       },
       "optionNames": {
-        "title": "選項代碼的自訂正體中文名稱",
+        "title": "Custom names for option codes",
         "type": "object",
         "additionalProperties": {
           "type": "string"
         }
       },
       "nativeTimerHours": {
-        "title": "原生定時關機選項（整數小時）",
-        "description": "由除濕機執行，預設 1、2、3、4、5、7、8 小時；實際可用時間以 LG 回應為準。",
+        "title": "Native off-timer options (whole hours)",
+        "description": "Run by the dehumidifier. Default 1, 2, 3, 4, 5, 7, 8 hours; the actually available durations are decided by LG.",
         "type": "array",
         "default": [
           1,
@@ -78,15 +78,15 @@
         }
       },
       "nativeTimerName": {
-        "title": "定時開關名稱（Siri 使用）",
+        "title": "Timer switch name (used by Siri)",
         "type": "string",
         "minLength": 1,
         "maxLength": 48,
-        "default": "除濕機定時"
+        "default": "Dehumidifier Timer"
       },
       "nativeTimerDefaultHours": {
-        "title": "開啟總定時開關的預設小時數",
-        "description": "必須是 nativeTimerHours 中的可用時數；未填寫則使用第一個可用時數。",
+        "title": "Default hours when turning on the main timer switch",
+        "description": "Must be one of nativeTimerHours; if left empty, the first available duration is used.",
         "type": "integer",
         "minimum": 1,
         "maximum": 24
