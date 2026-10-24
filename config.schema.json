@@ -10,6 +10,14 @@
         "type": "string",
         "default": "LG 除濕機"
       },
+      "country": {
+        "title": "國家代碼（兩碼 ISO，決定 LG 伺服器區域）",
+        "description": "依 LG ThinQ 帳號所屬國家填寫，例如 NZ、TW、AU、KR、US、GB。不再寫死；NZ 與 TW 同屬亞太（kic）區。",
+        "type": "string",
+        "default": "NZ",
+        "required": true,
+        "pattern": "^[A-Za-z]{2}$"
+      },
       "tokenFile": {
         "title": "PAT 權杖檔案的絕對路徑（建議）",
         "type": "string"
@@ -28,6 +36,18 @@
         "type": "integer",
         "minimum": 60,
         "default": 120
+      },
+      "waterFullSensor": {
+        "title": "滿水通知的感測器類型（Apple 家庭）",
+        "description": "「家庭」只對特定感測器類型推播。開門感測最安靜；漏水感測語意最貼近但 Apple 會升級為緊急警示；none 則不建立通知感測器。通知文字無法在家庭 App 內自訂（只能改感測器名稱）。",
+        "type": "string",
+        "default": "contact",
+        "oneOf": [
+          { "title": "開門感測 Contact（最安靜，建議）", "enum": ["contact"] },
+          { "title": "有人感測 Occupancy", "enum": ["occupancy"] },
+          { "title": "漏水感測 Leak（Apple 緊急警示）", "enum": ["leak"] },
+          { "title": "停用滿水通知 None", "enum": ["none"] }
+        ]
       },
       "optionNames": {
         "title": "選項代碼的自訂正體中文名稱",

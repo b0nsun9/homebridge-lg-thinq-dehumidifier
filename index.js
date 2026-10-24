@@ -21,6 +21,13 @@ const modelLabels = {
     MID: '中', POWER: 'Turbo', AIR_CLEAN: '自動清潔',
   },
 };
+// 滿水通知在「家庭」只能借用會推播的感測器類型。使用者可選；每種都用 1=觸發、0=解除。
+// contact=開門感測（最安靜）、occupancy=有人感測、leak=漏水感測（Apple 會升級為緊急警示）、none=停用。
+const WATER_SENSORS = {
+  contact: { service: 'ContactSensor', state: 'ContactSensorState' },
+  occupancy: { service: 'OccupancySensor', state: 'OccupancyDetected' },
+  leak: { service: 'LeakSensor', state: 'LeakDetected' },
+};
 
 class Platform {
   constructor(log, config, api) {
@@ -95,7 +102,7 @@ class Device {
     this.hap = platform.api.hap; this.C = this.hap.Characteristic; this.S = this.hap.Service;
     this.state = {}; this.lastUpdate = 0; this.online = false;
     this.queue = Promise.resolve(); this.bindings = []; this.wanted = new Set();
-    this.failures = 0; this.eventActive = false; this.pushOnline = false;
+    this.failures = 0; this.eventActive = false; this.pushOnline = false; this.waterState = null;
     const information = accessory.getService(this.S.AccessoryInformation);
     information.setCharacteristic(this.C.Manufacturer, 'LG')
       .setCharacteristic(this.C.Model, info.deviceInfo.modelName || 'DD201MWE0（待核實）')
@@ -137,12 +144,21 @@ class Device {
       }
     }
     if (profile.notification?.push?.includes('WATER_IS_FULL')) {
-      this.notification = this.service(this.S.ContactSensor, '水箱滿通知事件', 'water-full-event');
-      this.notification.getCharacteristic(this.C.ContactSensorState).onGet(() => {
-        if (!this.pushOnline) throw this.error();
-        return this.eventActive ? 1 : 0;
-      });
-      this.notification.getCharacteristic(this.C.StatusFault).onGet(() => this.pushOnline ? 0 : 1);
+      const choice = String(platform.config.waterFullSensor || 'contact').toLowerCase();
+      const sensor = WATER_SENSORS[choice];
+      if (choice === 'none') {
+        platform.log.info('滿水通知已依設定停用（waterFullSensor=none）。');
+      } else if (!sensor) {
+        platform.log.warn(`未知的 waterFullSensor「${choice}」；停用滿水通知。可用值：contact、occupancy、leak、none。`);
+      } else {
+        this.waterState = this.C[sensor.state];
+        this.notification = this.service(this.S[sensor.service], '水箱滿通知事件', 'water-full-event');
+        this.notification.getCharacteristic(this.waterState).onGet(() => {
+          if (!this.pushOnline) throw this.error();
+          return this.eventActive ? 1 : 0;
+        });
+        this.notification.getCharacteristic(this.C.StatusFault).onGet(() => this.pushOnline ? 0 : 1);
+      }
     }
     // 將目前濕度另以標準感測器提供，供「家庭」的氣候資訊使用。
     // 目標濕度仍屬於主除濕機，不把設定值偽裝成環境感測值。
@@ -249,7 +265,7 @@ class Device {
     this.pushOnline = online;
     if (!this.notification) return;
     this.notification.updateCharacteristic(this.C.StatusFault, online ? 0 : 1);
-    this.notification.updateCharacteristic(this.C.ContactSensorState, online ? (this.eventActive ? 1 : 0) : this.error());
+    this.notification.updateCharacteristic(this.waterState, online ? (this.eventActive ? 1 : 0) : this.error());
   }
   writeNativeTimer(hour) {
     const payload = nativeTimer.command(this.profile, hour);
@@ -271,12 +287,12 @@ class Device {
   message(message) {
     if (message.deviceId !== this.info.deviceId || message.pushCode !== 'WATER_IS_FULL' || !this.notification) return;
     this.eventActive = true;
-    this.notification.updateCharacteristic(this.C.ContactSensorState, 1);
+    this.notification.updateCharacteristic(this.waterState, 1);
     this.platform.log.warn('收到水箱滿通知；請倒水並確認實機。');
     clearTimeout(this.eventTimer);
     this.eventTimer = setTimeout(() => {
       this.eventActive = false;
-      this.notification.updateCharacteristic(this.C.ContactSensorState, this.pushOnline ? 0 : this.error());
+      this.notification.updateCharacteristic(this.waterState, this.pushOnline ? 0 : this.error());
     }, 10000);
   }
   stop() {

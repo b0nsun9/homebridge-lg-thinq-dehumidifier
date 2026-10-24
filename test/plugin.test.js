@@ -203,21 +203,36 @@ test('濕度範圍、刻度、例外值與模式均依能力檢查', () => {
   assert.throws(() => caps.command(profile(), 'mode', 'UNKNOWN'));
   assert.throws(() => caps.command(profile(), 'current', 50));
 });
-test('使用臺灣端點、每次不同訊息 ID、正確控制標頭與解包', async () => {
+test('端點區域依設定國家決定、每次不同訊息 ID、正確控制標頭與解包', async () => {
   const requests = [];
-  const client = new ThinQClient({ token: 'test-secret' }, 'unique-client', async (url, options) => {
+  const client = new ThinQClient({ token: 'test-secret', country: 'nz' }, 'unique-client', async (url, options) => {
     requests.push({ url, options }); return new Response(JSON.stringify({ response: { ok: true } }));
   });
   await client.control('a/b', { humidity: { targetHumidity: 50 } });
   await client.list();
   assert.equal(requests[0].url, 'https://api-kic.lgthinq.com/devices/a%2Fb/control');
-  assert.equal(requests[0].options.headers['x-country'], 'TW');
+  assert.equal(requests[0].options.headers['x-country'], 'NZ');
   assert.equal(requests[0].options.headers['x-conditional-control'], 'true');
   assert.notEqual(requests[0].options.headers['x-message-id'], requests[1].options.headers['x-message-id']);
 });
+test('國家代碼對應正確區域主機，缺少或不支援的代碼會被拒絕', async () => {
+  const hostFor = async country => {
+    let seen;
+    const client = new ThinQClient({ token: 't', country }, 'id', async url => { seen = url; return new Response(JSON.stringify({ response: {} })); });
+    await client.list();
+    return seen;
+  };
+  assert.equal(await hostFor('NZ'), 'https://api-kic.lgthinq.com/devices');
+  assert.equal(await hostFor('TW'), 'https://api-kic.lgthinq.com/devices');
+  assert.equal(await hostFor('US'), 'https://api-aic.lgthinq.com/devices');
+  assert.equal(await hostFor('DE'), 'https://api-eic.lgthinq.com/devices');
+  assert.throws(() => new ThinQClient({ token: 't' }, 'id'));                 // 缺少國家
+  assert.throws(() => new ThinQClient({ token: 't', country: 'ZZ' }, 'id'));   // 不支援的國家
+  assert.throws(() => new ThinQClient({ token: 't', country: 'NZL' }, 'id'));  // 非兩碼
+});
 test('API 錯誤不洩漏伺服器文字或權杖，並退避限流', async () => {
   let count = 0;
-  const client = new ThinQClient({ token: 'secret' }, 'id', async () => {
+  const client = new ThinQClient({ token: 'secret', country: 'NZ' }, 'id', async () => {
     count++; return new Response(JSON.stringify({ error: { code: '1306', message: 'secret' } }), { status: 429 });
   });
   await assert.rejects(client.list(), e => e.code === '1306' && !e.message.includes('secret'));
@@ -409,4 +424,41 @@ test('HomeKit 標準濕度範圍可上下設定，LG 指令仍符合設備刻度
   assert.deepEqual(sent,[60,40,65,70,30,55]);
   assert.equal(device.normalizeTarget(50),50);
   assert.throws(() => device.normalizeTarget(NaN));
+});
+
+function setupWith(config) {
+  const platform = { api: { hap }, config, log, interval: 120000, client: { state: async () => state(), control: async () => {} } };
+  const accessory = new hap.Accessory('測試除濕機', hap.uuid.generate(`wf-${config.waterFullSensor || 'default'}`));
+  const device = new Device(platform, accessory, { deviceId: 'test-id', deviceInfo: { modelName: '測試模型' } }, profile());
+  return { device, accessory, platform };
+}
+test('滿水感測器類型可設定（occupancy、leak），none 則停用', t => {
+  for (const [choice, svc, ch] of [
+    ['contact', hap.Service.ContactSensor, hap.Characteristic.ContactSensorState],
+    ['occupancy', hap.Service.OccupancySensor, hap.Characteristic.OccupancyDetected],
+    ['leak', hap.Service.LeakSensor, hap.Characteristic.LeakDetected],
+  ]) {
+    const { device, accessory } = setupWith({ waterFullSensor: choice }); t.after(() => device.stop());
+    assert.ok(device.notification, `${choice} 應建立通知感測器`);
+    assert.equal(device.notification.UUID, svc.UUID);
+    assert.equal(device.waterState, ch);
+    // 選定類型以外的感測器不應存在。
+    for (const other of [hap.Service.ContactSensor, hap.Service.OccupancySensor, hap.Service.LeakSensor]) {
+      if (other.UUID !== svc.UUID) assert.equal(accessory.getServiceById(other, 'water-full-event'), undefined);
+    }
+    device.pushStatus(true);
+    device.message({ deviceId: 'test-id', pushCode: 'WATER_IS_FULL' });
+    assert.equal(device.notification.getCharacteristic(ch).value, 1);
+  }
+  const { device, accessory } = setupWith({ waterFullSensor: 'none' }); t.after(() => device.stop());
+  assert.equal(device.notification, undefined);
+  assert.equal(device.waterState, null);
+  for (const svc of [hap.Service.ContactSensor, hap.Service.OccupancySensor, hap.Service.LeakSensor]) {
+    assert.equal(accessory.getServiceById(svc, 'water-full-event'), undefined);
+  }
+});
+test('未知的滿水感測器類型會停用通知而非崩潰', t => {
+  const { device } = setupWith({ waterFullSensor: 'banana' }); t.after(() => device.stop());
+  assert.equal(device.notification, undefined);
+  assert.equal(device.waterState, null);
 });

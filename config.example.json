@@ -1,6 +1,8 @@
 {
   "platform": "LGThinQDehumidifier",
   "name": "LG 除濕機",
+  "country": "NZ",
   "tokenFile": "/var/lib/homebridge/lg-thinq-token.txt",
-  "pollInterval": 120
+  "pollInterval": 120,
+  "waterFullSensor": "contact"
 }

@@ -1,3 +1,25 @@
+# Fork: configurable region + water-full sensor (b0nsun9)
+
+This is a fork of [Brantyen/homebridge-lg-thinq-dehumidifier](https://github.com/Brantyen/homebridge-lg-thinq-dehumidifier) (MIT) with two changes; everything below this section is upstream's changelog.
+
+**1. Region is configurable (no longer hard-coded to Taiwan).** Set your LG account's two-letter `country` in the plugin config (e.g. `NZ`, `TW`, `AU`, `KR`, `US`, `GB`). It drives both the `x-country` header and the `api-<region>.lgthinq.com` host (regions `kic`/`aic`/`eic`, mapped from LG's official SDK `country.py`). NZ and TW share the `kic` host. The Homebridge UI pre-fills `NZ`; required field.
+
+**2. Water-tank-full sensor type is a choice.** Apple Home only pushes phone alerts for certain accessory types, so the `WATER_IS_FULL` event is published as one of them. Set `waterFullSensor`:
+- `contact` — Contact sensor, "Opened" (default, quietest — upstream behaviour)
+- `occupancy` — Occupancy sensor, "Detected"
+- `leak` — Leak sensor (closest in meaning, but Apple raises a loud **Critical Alert**)
+- `none` — do not create a water-full sensor
+
+The alert *wording* cannot be changed in Apple Home (only the accessory's name); for custom text use a Shortcuts automation on the sensor, or Home Assistant. Switching type may need the accessory removed/re-added in Home for the icon to refresh.
+
+**Install this fork** (not on npm):
+```bash
+npm install --prefix /var/lib/homebridge https://github.com/b0nsun9/homebridge-lg-thinq-dehumidifier/archive/refs/heads/main.tar.gz
+```
+Still unverified on a real DD12GMWE0; local simulated tests only (`npm ci && npm test`).
+
+---
+
 # 0.1.10：恢復 0.1.4 電源控制，增加三／五／七小時定時
 
 移除 0.1.8 額外新增的「LG 除濕機電源」獨立 Switch。電源恢復 0.1.4 的主 HumidifierDehumidifier 服務 Active 控制方式，原本主服務 UUID、subtype、濕度設定與顯示規則保留。無目標濕度能力的設備仍沿用 0.1.4 的主電源 Switch 備援。更新重啟並成功重新初始化後，自動移除舊 power-control 服務；不用刪除主配件或重新配對。
