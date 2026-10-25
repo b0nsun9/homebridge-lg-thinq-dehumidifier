@@ -12,7 +12,10 @@ const caps = require('./lib/capabilities');
   let id;
   try { id = fs.readFileSync(idFile, 'utf8').trim(); }
   catch (e) { if (e.code !== 'ENOENT') throw e; id = randomUUID(); fs.writeFileSync(idFile, id, { mode: 0o600 }); }
-  const client = new ThinQClient({ tokenFile }, id);
+  // Country sets the LG server region; override with LG_THINQ_COUNTRY (2-letter ISO), default NZ.
+  const country = (process.env.LG_THINQ_COUNTRY || 'NZ').trim();
+  const client = new ThinQClient({ tokenFile, country }, id);
+  console.log(`Using country ${country.toUpperCase()} (set LG_THINQ_COUNTRY to override).`);
   const devices = (await client.list()).filter(d => d.deviceInfo?.deviceType === 'DEVICE_DEHUMIDIFIER');
   console.log(`Found ${devices.length} dehumidifier(s). The IDs below are for local config only; mask them before sharing.`);
   const results = [];

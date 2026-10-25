@@ -67,9 +67,12 @@ The event sensor turns on for 10 seconds when `WATER_IS_FULL` arrives, then clea
 ```bash
 cd /var/lib/homebridge
 export LG_THINQ_TOKEN_FILE=/var/lib/homebridge/lg-thinq-token.txt
+export LG_THINQ_COUNTRY=NZ   # optional; 2-letter ISO, defaults to NZ
 node /var/lib/homebridge/node_modules/homebridge-lg-thinq-dd201/diagnose.js
 ```
-Writes `lg-thinq-diagnostic.json` with model, capabilities, and current values — no PAT, device IDs, aliases, or certificates. Mask any IDs printed to the terminal before sharing.
+On a global npm install (e.g. macOS), the plugin lives under `` `$(npm root -g)`/homebridge-lg-thinq-dd201/diagnose.js ``.
+
+The diagnostic needs the same country as the plugin config, so it builds the right server region; it reads `LG_THINQ_COUNTRY` (default `NZ`). Writes `lg-thinq-diagnostic.json` with model, capabilities, and current values — no PAT, device IDs, aliases, or certificates. Mask any IDs printed to the terminal before sharing.
 
 ## Common errors
 

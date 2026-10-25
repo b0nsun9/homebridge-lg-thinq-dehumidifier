@@ -1,6 +1,6 @@
 {
   "name": "homebridge-lg-thinq-dd201",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Homebridge plugin for LG ThinQ dehumidifiers; configurable region and water-full sensor. DD201MWE0 pending real-device verification.",
   "main": "index.js",
   "keywords": [
