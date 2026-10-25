@@ -92,6 +92,33 @@ test('modeSwitches config picks which modes show, with model-specific names; emp
   assert.equal(empty.accessory.services.some(s => s.subtype && s.subtype.startsWith('mode:')), false);
 });
 
+test('basicSwitch mode exposes only a power switch plus humidity and water-full sensors', t => {
+  const { device, accessory } = setup(profile(), { basicSwitch: true }); t.after(() => device.stop());
+  assert.equal(accessory.getService(hap.Service.HumidifierDehumidifier), undefined);
+  assert.ok(accessory.getServiceById(hap.Service.Switch, 'power'));
+  assert.equal(accessory.services.some(s => s.subtype && s.subtype.startsWith('mode:')), false);
+  assert.ok(accessory.getServiceById(hap.Service.HumiditySensor, 'humidity'));
+  assert.ok(device.notification);
+  assert.equal(device.notification.UUID, hap.Service.ContactSensor.UUID);
+  assert.deepEqual(accessory.services.filter(s => s.UUID !== hap.Service.AccessoryInformation.UUID).map(s => s.subtype).sort(),
+    ['humidity', 'power', 'water-full-event']);
+});
+test('basicSwitch power toggle writes power commands', async t => {
+  const { device, accessory, platform } = setup(profile(), { basicSwitch: true }); t.after(() => device.stop());
+  const sent = []; let power = 'POWER_OFF';
+  platform.client.state = async () => ({ ...state(), operation: { dehumidifierOperationMode: power } });
+  platform.client.control = async (_id, payload) => { sent.push(payload); power = payload.operation.dehumidifierOperationMode; };
+  await device.refresh();
+  const c = accessory.getServiceById(hap.Service.Switch, 'power').getCharacteristic(hap.Characteristic.On);
+  assert.equal(await c.handleGetRequest(), false);
+  await c.handleSetRequest(true);
+  assert.deepEqual(sent, [{ operation: { dehumidifierOperationMode: 'POWER_ON' } }]);
+});
+test('basicSwitch still honours showHumiditySensor and waterFullSensor:none', t => {
+  const { device, accessory } = setup(profile(), { basicSwitch: true, showHumiditySensor: false, waterFullSensor: 'none' }); t.after(() => device.stop());
+  assert.deepEqual(accessory.services.filter(s => s.UUID !== hap.Service.AccessoryInformation.UUID).map(s => s.subtype), ['power']);
+  assert.equal(device.notification, undefined);
+});
 test('separate humidity sensor is on by default and hidden by showHumiditySensor:false', t => {
   const on = setup(); t.after(() => on.device.stop());
   assert.ok(on.accessory.getServiceById(hap.Service.HumiditySensor, 'humidity'));

@@ -10,6 +10,12 @@
         "type": "string",
         "default": "LG Dehumidifier"
       },
+      "basicSwitch": {
+        "title": "Basic mode (on/off switch + sensors only)",
+        "description": "Expose only a power on/off switch plus the current-humidity sensor and the water-tank-full sensor. Hides target humidity, fan speed, and mode controls. Turn off to restore the full dehumidifier tile.",
+        "type": "boolean",
+        "default": false
+      },
       "country": {
         "title": "Country code (2-letter ISO; sets the LG server region)",
         "description": "Use your LG ThinQ account's country, e.g. NZ, TW, AU, KR, US, GB. Not hard-coded. NZ and TW are both in the Asia-Pacific (kic) region.",

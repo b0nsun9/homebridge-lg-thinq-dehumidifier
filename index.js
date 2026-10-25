@@ -117,8 +117,11 @@ class Device {
     // Fan speeds for the single RotationSpeed slider, ordered low-to-high (Auto lowest).
     this.fans = caps.values(profile, 'fan').slice()
       .sort((a, b) => (FAN_ORDER.indexOf(a) + 1 || FAN_ORDER.length + 1) - (FAN_ORDER.indexOf(b) + 1 || FAN_ORDER.length + 1));
+    // Basic mode (config.basicSwitch): expose only a power on/off switch plus the readable sensors
+    // (current humidity + water-full). Hides target humidity, fan, and mode controls.
+    const basic = platform.config.basicSwitch === true;
     const target = caps.range(profile);
-    if (target && caps.property(profile, 'current')?.mode?.includes('r')) {
+    if (!basic && target && caps.property(profile, 'current')?.mode?.includes('r')) {
       const service = this.service(this.S.HumidifierDehumidifier, name, 'main');
       service.setPrimaryService(true);
       this.bind(service, this.C.Active, () => this.power() ? 1 : 0, v => this.write('power', v ? 'POWER_ON' : 'POWER_OFF'));
@@ -137,11 +140,12 @@ class Device {
       const service = this.service(this.S.Switch, name, 'power');
       service.setPrimaryService(true);
       this.bind(service, this.C.On, () => this.power(), v => this.write('power', v ? 'POWER_ON' : 'POWER_OFF'));
-      platform.log.warn('The device exposes no usable target-humidity range; creating only a switch and readable sensors.');
+      if (!basic) platform.log.warn('The device exposes no usable target-humidity range; creating only a switch and readable sensors.');
     }
     // Mode switches: only the ones chosen in config (default Clothes Dry). The unit is always in exactly
     // one job mode, so these behave as a radio group — turning one off is rejected, turn on another instead.
-    const requestedModes = platform.config.modeSwitches === undefined ? DEFAULT_MODE_SWITCHES
+    const requestedModes = basic ? []
+      : platform.config.modeSwitches === undefined ? DEFAULT_MODE_SWITCHES
       : Array.isArray(platform.config.modeSwitches) ? platform.config.modeSwitches : [];
     for (const value of caps.values(profile, 'mode').filter(m => requestedModes.includes(m))) {
       const display = modelLabels[info.deviceInfo.modelName]?.[value] || labels[value] || value;
