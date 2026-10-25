@@ -4,5 +4,7 @@
   "country": "NZ",
   "tokenFile": "/var/lib/homebridge/lg-thinq-token.txt",
   "pollInterval": 120,
-  "waterFullSensor": "contact"
+  "waterFullSensor": "contact",
+  "modeSwitches": ["RAPID_HUMIDITY"],
+  "showHumiditySensor": true
 }

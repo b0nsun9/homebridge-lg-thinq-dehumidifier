@@ -5,7 +5,6 @@ const { randomUUID } = require('node:crypto');
 const { ThinQClient } = require('./lib/client');
 const { PushConnection } = require('./lib/push');
 const caps = require('./lib/capabilities');
-const nativeTimer = require('./lib/native-timer');
 const PLUGIN = 'homebridge-lg-thinq-dd201';
 const PLATFORM = 'LGThinQDehumidifier';
 const labels = {
@@ -29,6 +28,11 @@ const WATER_SENSORS = {
   occupancy: { service: 'OccupancySensor', state: 'OccupancyDetected' },
   leak: { service: 'LeakSensor', state: 'LeakDetected' },
 };
+// Fan speeds ordered low-to-high for one RotationSpeed slider. AUTO sits at the bottom because the
+// HomeKit slider is linear and has no separate "auto" position; unknown codes sort after the known ones.
+const FAN_ORDER = ['AUTO', 'SLEEP', 'QUIET', 'SILENT', 'LOW', 'MID', 'MEDIUM', 'HIGH', 'POWER', 'TURBO'];
+// Modes shown as switches unless overridden; default to Clothes Dry only (the unit is always in one mode).
+const DEFAULT_MODE_SWITCHES = ['RAPID_HUMIDITY'];
 
 class Platform {
   constructor(log, config, api) {
@@ -110,6 +114,9 @@ class Device {
       .setCharacteristic(this.C.SerialNumber, this.hap.uuid.generate(info.deviceId))
       .setCharacteristic(this.C.FirmwareRevision, require('./package.json').version);
     const name = platform.config.name || 'LG Dehumidifier';
+    // Fan speeds for the single RotationSpeed slider, ordered low-to-high (Auto lowest).
+    this.fans = caps.values(profile, 'fan').slice()
+      .sort((a, b) => (FAN_ORDER.indexOf(a) + 1 || FAN_ORDER.length + 1) - (FAN_ORDER.indexOf(b) + 1 || FAN_ORDER.length + 1));
     const target = caps.range(profile);
     if (target && caps.property(profile, 'current')?.mode?.includes('r')) {
       const service = this.service(this.S.HumidifierDehumidifier, name, 'main');
@@ -123,26 +130,28 @@ class Device {
       this.bind(service, this.C.CurrentHumidifierDehumidifierState, () => this.power() ? 1 : 0);
       this.bind(service, this.C.RelativeHumidityDehumidifierThreshold, () => this.humidity('target'),
         v => this.write('target', this.normalizeTarget(v)), { minValue: 0, maxValue: 100, minStep: 1 });
+      this.bindFan(service);
     } else {
       const service = this.service(this.S.Switch, name, 'power');
       service.setPrimaryService(true);
       this.bind(service, this.C.On, () => this.power(), v => this.write('power', v ? 'POWER_ON' : 'POWER_OFF'));
       platform.log.warn('The device exposes no usable target-humidity range; creating only a switch and readable sensors.');
     }
-    // Each option is its own switch, to avoid treating unordered enum values as a percentage.
-    for (const [key, prefix] of [['fan', 'Fan'], ['mode', 'Mode']]) {
-      for (const value of caps.values(profile, key)) {
-        const display = platform.config.optionNames?.[value] || modelLabels[info.deviceInfo.modelName]?.[value] || labels[value] || `${value} (unverified)`;
-        const service = this.service(this.S.Switch, `${prefix} ${display}`, `${key}:${value}`);
-        this.bind(service, this.C.On, () => {
-          this.assertOnline();
-          if (caps.read(this.state, key) === undefined) throw this.error();
-          return caps.read(this.state, key) === value;
-        }, async on => {
-          if (!on) throw new Error('This is an option switch; turn on another option, or use the main dehumidifier switch.');
-          await this.write(key, value);
-        });
-      }
+    // Mode switches: only the ones chosen in config (default Clothes Dry). The unit is always in exactly
+    // one job mode, so these behave as a radio group — turning one off is rejected, turn on another instead.
+    const requestedModes = platform.config.modeSwitches === undefined ? DEFAULT_MODE_SWITCHES
+      : Array.isArray(platform.config.modeSwitches) ? platform.config.modeSwitches : [];
+    for (const value of caps.values(profile, 'mode').filter(m => requestedModes.includes(m))) {
+      const display = modelLabels[info.deviceInfo.modelName]?.[value] || labels[value] || value;
+      const service = this.service(this.S.Switch, display, `mode:${value}`);
+      this.bind(service, this.C.On, () => {
+        this.assertOnline();
+        if (caps.read(this.state, 'mode') === undefined) throw this.error();
+        return caps.read(this.state, 'mode') === value;
+      }, async on => {
+        if (!on) throw new Error('This is a mode switch; turn on another mode instead.');
+        await this.write('mode', value);
+      });
     }
     if (profile.notification?.push?.includes('WATER_IS_FULL')) {
       const choice = String(platform.config.waterFullSensor || 'contact').toLowerCase();
@@ -161,12 +170,12 @@ class Device {
         this.notification.getCharacteristic(this.C.StatusFault).onGet(() => this.pushOnline ? 0 : 1);
       }
     }
-    // Also expose the current humidity as a standard sensor for Apple Home's climate info.
-    // Target humidity stays on the main dehumidifier; a setpoint is never disguised as an ambient reading.
-    if (caps.property(profile, 'current')?.mode?.includes('r')) {
+    // Optional standalone humidity sensor (default on; set showHumiditySensor:false to hide). The main
+    // tile already shows current humidity; this is for separate automations/history. A setpoint is never
+    // disguised as an ambient reading, so target humidity stays only on the main dehumidifier.
+    if (platform.config.showHumiditySensor !== false && caps.property(profile, 'current')?.mode?.includes('r')) {
       this.bind(this.service(this.S.HumiditySensor, `${name} Humidity`, 'humidity'), this.C.CurrentRelativeHumidity, () => this.humidity('current'));
     }
-    nativeTimer.bind(this);
     for (const service of [...accessory.services]) {
       if (service.UUID !== this.S.AccessoryInformation.UUID && !this.wanted.has(service)) accessory.removeService(service);
     }
@@ -181,6 +190,20 @@ class Device {
     }
     if (!allowed.length) throw this.error();
     return allowed.reduce((best, n) => Math.abs(n - value) < Math.abs(best - value) ? n : best);
+  }
+  // Fan speed on one RotationSpeed slider: N speeds map to N evenly spaced stops (Auto is the lowest).
+  bindFan(service) {
+    if (!this.fans.length) return;
+    const step = 100 / this.fans.length;
+    this.bind(service, this.C.RotationSpeed, () => {
+      this.assertOnline();
+      const index = this.fans.indexOf(caps.read(this.state, 'fan'));
+      if (index < 0) throw this.error();
+      return (index + 1) * step;
+    }, async value => {
+      const index = Math.min(this.fans.length, Math.max(1, Math.round(value / step)));
+      await this.write('fan', this.fans[index - 1]);
+    }, { minValue: 0, maxValue: 100, minStep: step });
   }
   error() { return new this.hap.HapStatusError(-70402); }
   assertOnline() {
@@ -237,7 +260,6 @@ class Device {
         const state = await this.platform.client.state(this.info.deviceId);
         if (!state || typeof state !== 'object' || Array.isArray(state) || !state.operation) throw new Error('Incomplete device state response.');
         this.state = state; this.online = true; this.lastUpdate = Date.now();
-        nativeTimer.reconcile(this);
         this.failures = 0; this.update();
       } catch (e) {
         this.online = false; this.failures++; this.update(); throw e;
@@ -267,23 +289,6 @@ class Device {
     if (!this.notification) return;
     this.notification.updateCharacteristic(this.C.StatusFault, online ? 0 : 1);
     this.notification.updateCharacteristic(this.waterState, online ? (this.eventActive ? 1 : 0) : this.error());
-  }
-  writeNativeTimer(hour) {
-    const payload = nativeTimer.command(this.profile, hour);
-    const task = this.queue.then(async () => {
-      if (this.pending) await this.pending;
-      this.assertOnline();
-      if (this.platform.stopped) throw new Error('Homebridge is shutting down');
-      if (hour !== null && !this.power()) throw new Error('Turn the dehumidifier on before setting an off-timer');
-      const previouslyActive = this.state.sleepTimer?.relativeStopTimer === 'SET';
-      await this.platform.client.control(this.info.deviceId, payload);
-      this.nativeTimerPending = { hour, previouslyActive, requestedAt: Date.now() };
-      // As with other controls, acknowledge acceptance but only publish state read from LG.
-      clearTimeout(this.afterWrite);
-      this.afterWrite = setTimeout(() => void this.refresh().catch(e => this.platform.log.warn(e.message)), 3000);
-    });
-    this.queue = task.catch(() => {});
-    return task;
   }
   message(message) {
     if (message.deviceId !== this.info.deviceId || message.pushCode !== 'WATER_IS_FULL' || !this.notification) return;

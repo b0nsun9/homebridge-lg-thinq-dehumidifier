@@ -49,47 +49,30 @@
           { "title": "Disable water-full notification (None)", "enum": ["none"] }
         ]
       },
-      "optionNames": {
-        "title": "Custom names for option codes",
-        "type": "object",
-        "additionalProperties": {
-          "type": "string"
-        }
-      },
-      "nativeTimerHours": {
-        "title": "Native off-timer options (whole hours)",
-        "description": "Run by the dehumidifier. Default 1, 2, 3, 4, 5, 7, 8 hours; the actually available durations are decided by LG.",
+      "modeSwitches": {
+        "title": "Mode switches to show in Home",
+        "description": "Only the ticked modes appear as on/off switches. The unit is always in exactly one mode, so they act as a radio group (turning one on switches to it). Leave everything unticked to show no mode switches.",
         "type": "array",
         "default": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          7,
-          8
+          "RAPID_HUMIDITY"
         ],
         "uniqueItems": true,
-        "maxItems": 12,
         "items": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 24
+          "type": "string",
+          "oneOf": [
+            { "title": "Clothes Dry", "enum": ["RAPID_HUMIDITY"] },
+            { "title": "Smart Dehumidify Plus", "enum": ["SMART_HUMIDITY"] },
+            { "title": "Quiet Dehumidify", "enum": ["QUIET_HUMIDITY"] },
+            { "title": "Shoe/Closet Dry", "enum": ["INTENSIVE_DRY"] },
+            { "title": "Auto Clean", "enum": ["AIR_CLEAN"] }
+          ]
         }
       },
-      "nativeTimerName": {
-        "title": "Timer switch name (used by Siri)",
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 48,
-        "default": "Dehumidifier Timer"
-      },
-      "nativeTimerDefaultHours": {
-        "title": "Default hours when turning on the main timer switch",
-        "description": "Must be one of nativeTimerHours; if left empty, the first available duration is used.",
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 24
+      "showHumiditySensor": {
+        "title": "Show a separate humidity sensor tile",
+        "description": "The main dehumidifier tile already shows the current humidity. Enable this only if you want a standalone humidity sensor for separate automations or history.",
+        "type": "boolean",
+        "default": true
       }
     }
   }

@@ -1,8 +1,8 @@
 # Homebridge LG ThinQ Dehumidifier
 
-A Homebridge plugin that brings an LG ThinQ dehumidifier into Apple Home through LG's official ThinQ Connect API (Personal Access Token). It exposes power, current humidity, target humidity, fan speed, mode, an off-timer, and a water-tank-full notification.
+A Homebridge plugin that brings an LG ThinQ dehumidifier into Apple Home through LG's official ThinQ Connect API (Personal Access Token). It exposes power, current humidity, target humidity, fan speed, and a water-tank-full notification on one tile, plus optional mode switches.
 
-This is a fork of [Brantyen/homebridge-lg-thinq-dehumidifier](https://github.com/Brantyen/homebridge-lg-thinq-dehumidifier) (MIT). The upstream repo's detailed changelog and install guide are in Traditional Chinese; this fork is in English and adds two configurable settings.
+This is a fork of [Brantyen/homebridge-lg-thinq-dehumidifier](https://github.com/Brantyen/homebridge-lg-thinq-dehumidifier) (MIT). The upstream repo's detailed changelog and install guide are in Traditional Chinese; this fork is in English, makes region and water-sensor type configurable, and gives Apple Home a clean single-tile layout.
 
 ## Fork changes (b0nsun9)
 
@@ -16,13 +16,15 @@ This is a fork of [Brantyen/homebridge-lg-thinq-dehumidifier](https://github.com
 
 The alert *wording* cannot be changed in Apple Home (only the accessory's name); for custom text use a Shortcuts automation on the sensor, or Home Assistant. Switching type may need the accessory removed/re-added in Home for the icon to refresh.
 
+**3. Clean single-tile Apple Home layout.** Upstream exposed every fan speed and every mode as its own switch (plus a native off-timer with one switch per hour), so one dehumidifier became 15–20 tiles. This fork puts **fan speed on the main tile as one RotationSpeed slider** (the device's speeds ordered low-to-high, with `AUTO` as the lowest step since the HomeKit slider is linear), shows **only the mode switches you pick** (`modeSwitches`, default Clothes Dry; they act as a radio group), makes the standalone humidity sensor optional (`showHumiditySensor`, default on), and **removes the native off-timer entirely**. Default result: one dehumidifier tile + the water-full sensor.
+
 ## Install (not on npm)
 
-Run in the Homebridge web terminal, then restart Homebridge:
+Global install (macOS and other npm setups), then restart Homebridge:
 ```bash
-npm install --prefix /var/lib/homebridge https://github.com/b0nsun9/homebridge-lg-thinq-dehumidifier/archive/refs/heads/main.tar.gz
+sudo npm install -g "https://github.com/b0nsun9/homebridge-lg-thinq-dehumidifier/archive/refs/tags/v0.3.0.tar.gz"
 ```
-Requires Node.js 22+ and Homebridge 1.8+. Still unverified on a real DD12GMWE0; local simulated tests only (`npm ci && npm test`).
+On a Homebridge box that keeps plugins under its storage path, use `npm install --prefix /var/lib/homebridge <same URL>` instead. Requires Node.js 22+ and Homebridge 1.8+. Verified against the DD12GMWE0 / DD201MWE0 capability profile (model `DHUM_231006_WW`); local simulated tests only (`npm ci && npm test`).
 
 ## Get an LG Personal Access Token (PAT)
 
@@ -37,6 +39,8 @@ In the Homebridge UI, open the plugin settings and set:
 | `country` | 2-letter ISO code of your LG account's country (default `NZ`). |
 | `token` / `tokenFile` | The PAT string, or a path to a file containing only the PAT. |
 | `waterFullSensor` | `contact` (default) / `occupancy` / `leak` / `none`. |
+| `modeSwitches` | Which modes appear as switches. Default `["RAPID_HUMIDITY"]` (Clothes Dry). Tick more in the UI, or leave empty for none. |
+| `showHumiditySensor` | Show a separate humidity sensor tile (default `true`; the main tile already shows humidity). |
 | `deviceId` | Required only when the account has more than one dehumidifier. |
 | `pollInterval` | Status poll seconds (minimum 60, default 120). |
 
@@ -49,11 +53,11 @@ Save, restart Homebridge, then add the bridge in the iPhone Home app by scanning
 | Power | Official API power command |
 | Current humidity | Read from the device; shows "no response" when missing or offline |
 | Target humidity | Range, step, and exceptions taken from the device profile; not hard-coded 30–70% |
-| Fan speed | One option switch per fan speed the device allows |
-| Mode | One option switch per mode the device allows |
+| Fan speed | A single RotationSpeed slider on the main tile; the device's speeds, ordered low-to-high, with `AUTO` as the lowest step |
+| Mode | Switches only for the modes you pick (`modeSwitches`, default Clothes Dry); radio-group behaviour |
 | Water-full | Subscribes to the official MQTT push only when the profile lists `WATER_IS_FULL` |
 
-- A mode/fan option switch means "select this option". To change, turn another option on; turning the current option off is rejected — use the main switch to power off.
+- A mode switch means "select this mode". To change, turn another mode on; turning the current mode off is rejected (the unit is always in some mode) — use the main tile to power off.
 - Cloud-based: needs the internet. State is polled every `pollInterval` seconds; after a command is accepted it reads back after ~3s, and cloud lag can be longer. Rate-limit and disconnects back off; commands are not auto-resent.
 - One device per platform entry; set `deviceId` if the account has several dehumidifiers.
 - The HomeKit primary type is a dehumidifier. The official API exposes no compressor state, so "Idle" when on is just a HomeKit compatibility value — do not read it as "currently dehumidifying".
