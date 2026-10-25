@@ -128,8 +128,10 @@ class Device {
       }, { validValues: [2], minValue: 2, maxValue: 2 });
       // The official API has no compressor state; when on, report IDLE and do not infer active dehumidifying.
       this.bind(service, this.C.CurrentHumidifierDehumidifierState, () => this.power() ? 1 : 0);
+      // Constrain the Home slider to the device's own allowed values (e.g. 30-70% in 5% steps) so only
+      // valid targets can be picked; normalizeTarget still snaps as a safety net (and for any excluded value).
       this.bind(service, this.C.RelativeHumidityDehumidifierThreshold, () => this.humidity('target'),
-        v => this.write('target', this.normalizeTarget(v)), { minValue: 0, maxValue: 100, minStep: 1 });
+        v => this.write('target', this.normalizeTarget(v)), { minValue: target.min, maxValue: target.max, minStep: target.step });
       this.bindFan(service);
     } else {
       const service = this.service(this.S.Switch, name, 'power');

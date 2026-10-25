@@ -236,7 +236,7 @@ test('humidity as the main dehumidifier and a sensor output; upgrading an old ac
   assert.equal(sensor.getCharacteristic(hap.Characteristic.CurrentRelativeHumidity).value, 59);
   const target = main.getCharacteristic(hap.Characteristic.RelativeHumidityDehumidifierThreshold);
   assert.equal(target.value, 50);
-  assert.deepEqual([target.props.minValue, target.props.maxValue, target.props.minStep], [0, 100, 1]);
+  assert.deepEqual([target.props.minValue, target.props.maxValue, target.props.minStep], [30, 70, 5]);
   await target.handleSetRequest(55);
   assert.deepEqual(sent, [{ humidity: { targetHumidity: 55 } }]);
   // Polling still uses the device actual value and does not treat the setpoint as current humidity.
@@ -291,7 +291,7 @@ test('HomeKit standard humidity range sets up and down; LG commands still match 
   for (const [requested, expected] of [[60, 60], [40, 40], [65, 65], [99, 70], [1, 30], [56, 55]]) {
     await device.refresh(); await c.handleSetRequest(requested); await device.refresh();
     assert.equal(c.value, expected);
-    assert.deepEqual([c.props.minValue, c.props.maxValue, c.props.minStep], [0, 100, 1]);
+    assert.deepEqual([c.props.minValue, c.props.maxValue, c.props.minStep], [30, 70, 5]);
   }
   assert.deepEqual(sent, [60, 40, 65, 70, 30, 55]);
   assert.equal(device.normalizeTarget(50), 50);
