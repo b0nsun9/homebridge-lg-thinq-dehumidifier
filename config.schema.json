@@ -11,8 +11,8 @@
         "default": "LG Dehumidifier"
       },
       "basicSwitch": {
-        "title": "Basic mode (on/off switch + sensors only)",
-        "description": "Expose only a power on/off switch plus the current-humidity sensor and the water-tank-full sensor. Hides target humidity, fan speed, and mode controls. Turn off to restore the full dehumidifier tile.",
+        "title": "Basic mode (minimal dehumidifier tile + sensors)",
+        "description": "Keep the dehumidifier tile but strip its detail down to power on/off and current humidity only - no target-humidity slider, no fan, no mode switches. The current-humidity sensor and the water-tank-full sensor still appear as their own tiles. Turn off to restore the full dehumidifier controls.",
         "type": "boolean",
         "default": false
       },

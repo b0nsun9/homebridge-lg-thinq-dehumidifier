@@ -117,13 +117,21 @@ class Device {
     // Fan speeds for the single RotationSpeed slider, ordered low-to-high (Auto lowest).
     this.fans = caps.values(profile, 'fan').slice()
       .sort((a, b) => (FAN_ORDER.indexOf(a) + 1 || FAN_ORDER.length + 1) - (FAN_ORDER.indexOf(b) + 1 || FAN_ORDER.length + 1));
-    // Basic mode (config.basicSwitch): expose only a power on/off switch plus the readable sensors
-    // (current humidity + water-full). Hides target humidity, fan, and mode controls.
+    // Basic mode (config.basicSwitch): a minimal dehumidifier tile - power + current humidity only,
+    // no target slider, no fan, no mode switches. The readable sensors (current humidity + water-full)
+    // still show as their own tiles. Full mode adds the target slider and fan onto the same tile.
     const basic = platform.config.basicSwitch === true;
     const target = caps.range(profile);
-    if (!basic && target && caps.property(profile, 'current')?.mode?.includes('r')) {
+    const currentReadable = caps.property(profile, 'current')?.mode?.includes('r');
+    // The HumidifierDehumidifier service is what makes Apple Home draw a dehumidifier tile (its icon toggles
+    // power, tapping the tile opens the detail). CurrentRelativeHumidity is a required part of that service,
+    // so it needs a readable current humidity. Without one we cannot build it honestly, so fall back to a
+    // plain switch. Full mode also needs a target range for the slider.
+    if (currentReadable && (basic || target)) {
       const service = this.service(this.S.HumidifierDehumidifier, name, 'main');
       service.setPrimaryService(true);
+      // Mark the accessory as a dehumidifier so Home uses the appliance tile and icon, not a generic one.
+      this.accessory.category = this.hap.Categories.AIR_DEHUMIDIFIER;
       this.bind(service, this.C.Active, () => this.power() ? 1 : 0, v => this.write('power', v ? 'POWER_ON' : 'POWER_OFF'));
       this.bind(service, this.C.CurrentRelativeHumidity, () => this.humidity('current'));
       this.bind(service, this.C.TargetHumidifierDehumidifierState, () => 2, v => {
@@ -131,11 +139,13 @@ class Device {
       }, { validValues: [2], minValue: 2, maxValue: 2 });
       // The official API has no compressor state; when on, report IDLE and do not infer active dehumidifying.
       this.bind(service, this.C.CurrentHumidifierDehumidifierState, () => this.power() ? 1 : 0);
-      // Constrain the Home slider to the device's own allowed values (e.g. 30-70% in 5% steps) so only
-      // valid targets can be picked; normalizeTarget still snaps as a safety net (and for any excluded value).
-      this.bind(service, this.C.RelativeHumidityDehumidifierThreshold, () => this.humidity('target'),
-        v => this.write('target', this.normalizeTarget(v)), { minValue: target.min, maxValue: target.max, minStep: target.step });
-      this.bindFan(service);
+      if (!basic && target) {
+        // Constrain the Home slider to the device's own allowed values (e.g. 30-70% in 5% steps) so only
+        // valid targets can be picked; normalizeTarget still snaps as a safety net (and for any excluded value).
+        this.bind(service, this.C.RelativeHumidityDehumidifierThreshold, () => this.humidity('target'),
+          v => this.write('target', this.normalizeTarget(v)), { minValue: target.min, maxValue: target.max, minStep: target.step });
+        this.bindFan(service);
+      }
     } else {
       const service = this.service(this.S.Switch, name, 'power');
       service.setPrimaryService(true);

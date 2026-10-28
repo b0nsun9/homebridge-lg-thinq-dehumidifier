@@ -92,31 +92,38 @@ test('modeSwitches config picks which modes show, with model-specific names; emp
   assert.equal(empty.accessory.services.some(s => s.subtype && s.subtype.startsWith('mode:')), false);
 });
 
-test('basicSwitch mode exposes only a power switch plus humidity and water-full sensors', t => {
+test('basic mode: main tile is a minimal dehumidifier (no target slider, no fan) plus humidity and water sensors', t => {
   const { device, accessory } = setup(profile(), { basicSwitch: true }); t.after(() => device.stop());
-  assert.equal(accessory.getService(hap.Service.HumidifierDehumidifier), undefined);
-  assert.ok(accessory.getServiceById(hap.Service.Switch, 'power'));
+  const main = accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main');
+  assert.ok(main); assert.equal(main.isPrimaryService, true);
+  assert.equal(accessory.getServiceById(hap.Service.Switch, 'power'), undefined);
+  // The dehumidifier category gives Apple Home the appliance tile (icon toggles power, tile opens detail).
+  assert.equal(accessory.category, hap.Categories.AIR_DEHUMIDIFIER);
+  // Minimal detail only: power + current humidity + locked dehumidify state. No target dial, no fan, no modes.
+  assert.deepEqual(main.getCharacteristic(hap.Characteristic.TargetHumidifierDehumidifierState).props.validValues, [2]);
+  assert.equal(main.testCharacteristic(hap.Characteristic.RelativeHumidityDehumidifierThreshold), false);
+  assert.equal(main.testCharacteristic(hap.Characteristic.RotationSpeed), false);
   assert.equal(accessory.services.some(s => s.subtype && s.subtype.startsWith('mode:')), false);
   assert.ok(accessory.getServiceById(hap.Service.HumiditySensor, 'humidity'));
   assert.ok(device.notification);
   assert.equal(device.notification.UUID, hap.Service.ContactSensor.UUID);
   assert.deepEqual(accessory.services.filter(s => s.UUID !== hap.Service.AccessoryInformation.UUID).map(s => s.subtype).sort(),
-    ['humidity', 'power', 'water-full-event']);
+    ['humidity', 'main', 'water-full-event']);
 });
-test('basicSwitch power toggle writes power commands', async t => {
+test('basic mode power toggle writes power commands via Active', async t => {
   const { device, accessory, platform } = setup(profile(), { basicSwitch: true }); t.after(() => device.stop());
   const sent = []; let power = 'POWER_OFF';
   platform.client.state = async () => ({ ...state(), operation: { dehumidifierOperationMode: power } });
   platform.client.control = async (_id, payload) => { sent.push(payload); power = payload.operation.dehumidifierOperationMode; };
   await device.refresh();
-  const c = accessory.getServiceById(hap.Service.Switch, 'power').getCharacteristic(hap.Characteristic.On);
-  assert.equal(await c.handleGetRequest(), false);
-  await c.handleSetRequest(true);
+  const c = accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main').getCharacteristic(hap.Characteristic.Active);
+  assert.equal(await c.handleGetRequest(), 0);
+  await c.handleSetRequest(1);
   assert.deepEqual(sent, [{ operation: { dehumidifierOperationMode: 'POWER_ON' } }]);
 });
-test('basicSwitch still honours showHumiditySensor and waterFullSensor:none', t => {
+test('basic mode still honours showHumiditySensor and waterFullSensor:none', t => {
   const { device, accessory } = setup(profile(), { basicSwitch: true, showHumiditySensor: false, waterFullSensor: 'none' }); t.after(() => device.stop());
-  assert.deepEqual(accessory.services.filter(s => s.UUID !== hap.Service.AccessoryInformation.UUID).map(s => s.subtype), ['power']);
+  assert.deepEqual(accessory.services.filter(s => s.UUID !== hap.Service.AccessoryInformation.UUID).map(s => s.subtype), ['main']);
   assert.equal(device.notification, undefined);
 });
 test('separate humidity sensor is on by default and hidden by showHumiditySensor:false', t => {

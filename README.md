@@ -36,7 +36,7 @@ In the Homebridge UI, open the plugin settings and set:
 
 | Field | Notes |
 | --- | --- |
-| `basicSwitch` | `true` exposes only a power on/off switch plus the humidity and water-full sensors (hides target humidity, fan, and modes). Default `false`. |
+| `basicSwitch` | `true` keeps the dehumidifier tile but strips its detail to power on/off and current humidity only (no target slider, fan, or mode switches); the humidity and water-full sensors still show as their own tiles. Default `false`. |
 | `country` | 2-letter ISO code of your LG account's country (default `NZ`). |
 | `token` / `tokenFile` | The PAT string, or a path to a file containing only the PAT. |
 | `waterFullSensor` | `contact` (default) / `occupancy` / `leak` / `none`. |
