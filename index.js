@@ -140,20 +140,20 @@ class Device {
       // The official API has no compressor state; when on, report IDLE and do not infer active dehumidifying.
       this.bind(service, this.C.CurrentHumidifierDehumidifierState, () => this.power() ? 1 : 0);
       const { PAIRED_READ, PAIRED_WRITE, NOTIFY } = this.hap.Perms;
-      if (!basic && target) {
-        // Constrain the Home slider to the device's own allowed values (e.g. 30-70% in 5% steps) so only
-        // valid targets can be picked; normalizeTarget still snaps as a safety net (and for any excluded value).
-        // perms are set explicitly because a cached accessory from basic mode stores this one read-only.
+      if (target) {
+        // The target slider, in both modes: the tile's "Set to 55%" comes from this value, and Apple Home
+        // always draws a slider for it, so it has to work (a read-only one snapped back when dragged, v0.6.0).
+        // Constrain the slider to the device's own allowed values (e.g. 30-70% in 5% steps) so only valid
+        // targets can be picked; normalizeTarget still snaps as a safety net (and for any excluded value).
+        // perms are set explicitly because v0.6.0 cached this characteristic read-only.
         this.bind(service, this.C.RelativeHumidityDehumidifierThreshold, () => this.humidity('target'),
           v => this.write('target', this.normalizeTarget(v)),
           { minValue: target.min, maxValue: target.max, minStep: target.step, perms: [PAIRED_READ, PAIRED_WRITE, NOTIFY] });
-        this.bindFan(service);
-      } else if (basic && caps.property(profile, 'target')?.mode?.includes('r')) {
-        // Basic mode shows the device's target read-only, so the tile reads "Set to 55%" instead of a bare
-        // "Set to". Without the write permission the HAP server rejects any write, so Home cannot change it.
-        this.bind(service, this.C.RelativeHumidityDehumidifierThreshold, () => this.humidity('target'), null,
-          { minValue: target?.min ?? 0, maxValue: target?.max ?? 100, minStep: target?.step ?? 1, perms: [PAIRED_READ, NOTIFY] });
+      } else if (service.testCharacteristic(this.C.RelativeHumidityDehumidifierThreshold)) {
+        // Basic mode on a device with no settable target: drop a cached slider that nothing answers.
+        service.removeCharacteristic(service.getCharacteristic(this.C.RelativeHumidityDehumidifierThreshold));
       }
+      if (!basic && target) this.bindFan(service);
       if (basic && service.testCharacteristic(this.C.RotationSpeed)) {
         // A cached accessory from full mode still carries the fan slider; with nothing bound to it, it would
         // only ever answer "no response", so take it off the basic tile.
