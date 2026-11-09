@@ -22,7 +22,7 @@ The alert *wording* cannot be changed in Apple Home (only the accessory's name);
 
 Global install (macOS and other npm setups), then restart Homebridge:
 ```bash
-sudo npm install -g "https://github.com/b0nsun9/homebridge-lg-thinq-dehumidifier/archive/refs/tags/v0.3.0.tar.gz"
+sudo npm install -g "https://github.com/b0nsun9/homebridge-lg-thinq-dehumidifier/archive/refs/tags/v0.6.0.tar.gz"
 ```
 On a Homebridge box that keeps plugins under its storage path, use `npm install --prefix /var/lib/homebridge <same URL>` instead. Requires Node.js 22+ and Homebridge 1.8+. Verified against the DD12GMWE0 / DD201MWE0 capability profile (model `DHUM_231006_WW`); local simulated tests only (`npm ci && npm test`).
 
@@ -36,7 +36,7 @@ In the Homebridge UI, open the plugin settings and set:
 
 | Field | Notes |
 | --- | --- |
-| `basicSwitch` | `true` keeps the dehumidifier tile but strips its detail to power on/off and current humidity only (no target slider, fan, or mode switches); the humidity and water-full sensors still show as their own tiles. Default `false`. |
+| `basicSwitch` | `true` keeps the dehumidifier tile but strips its detail to power on/off, current humidity and the target humidity shown read-only (the tile reads "Set to 55%"; no target slider, fan, or mode switches); the humidity and water-full sensors still show as their own tiles. Default `false`. |
 | `country` | 2-letter ISO code of your LG account's country (default `NZ`). |
 | `token` / `tokenFile` | The PAT string, or a path to a file containing only the PAT. |
 | `waterFullSensor` | `contact` (default) / `occupancy` / `leak` / `none`. |
@@ -53,7 +53,7 @@ Save, restart Homebridge, then add the bridge in the iPhone Home app by scanning
 | --- | --- |
 | Power | Official API power command |
 | Current humidity | Read from the device; shows "no response" when missing or offline |
-| Target humidity | Range, step, and exceptions taken from the device profile; not hard-coded 30–70% |
+| Target humidity | Range, step, and exceptions taken from the device profile; not hard-coded 30–70%. In basic mode it is shown read-only (Home cannot change it) |
 | Fan speed | A single RotationSpeed slider on the main tile; the device's speeds, ordered low-to-high, with `AUTO` as the lowest step |
 | Mode | Switches only for the modes you pick (`modeSwitches`, default Clothes Dry); radio-group behaviour |
 | Water-full | Subscribes to the official MQTT push only when the profile lists `WATER_IS_FULL` |

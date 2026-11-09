@@ -92,16 +92,17 @@ test('modeSwitches config picks which modes show, with model-specific names; emp
   assert.equal(empty.accessory.services.some(s => s.subtype && s.subtype.startsWith('mode:')), false);
 });
 
-test('basic mode: main tile is a minimal dehumidifier (no target slider, no fan) plus humidity and water sensors', t => {
+test('basic mode: main tile is a minimal dehumidifier (read-only target, no fan) plus humidity and water sensors', t => {
   const { device, accessory } = setup(profile(), { basicSwitch: true }); t.after(() => device.stop());
   const main = accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main');
   assert.ok(main); assert.equal(main.isPrimaryService, true);
   assert.equal(accessory.getServiceById(hap.Service.Switch, 'power'), undefined);
   // The dehumidifier category gives Apple Home the appliance tile (icon toggles power, tile opens detail).
   assert.equal(accessory.category, hap.Categories.AIR_DEHUMIDIFIER);
-  // Minimal detail only: power + current humidity + locked dehumidify state. No target dial, no fan, no modes.
+  // Minimal detail only: power + current humidity + locked dehumidify state + the target shown read-only.
+  // No fan, no modes.
   assert.deepEqual(main.getCharacteristic(hap.Characteristic.TargetHumidifierDehumidifierState).props.validValues, [2]);
-  assert.equal(main.testCharacteristic(hap.Characteristic.RelativeHumidityDehumidifierThreshold), false);
+  assert.equal(main.testCharacteristic(hap.Characteristic.RelativeHumidityDehumidifierThreshold), true);
   assert.equal(main.testCharacteristic(hap.Characteristic.RotationSpeed), false);
   assert.equal(accessory.services.some(s => s.subtype && s.subtype.startsWith('mode:')), false);
   assert.ok(accessory.getServiceById(hap.Service.HumiditySensor, 'humidity'));
@@ -120,6 +121,41 @@ test('basic mode power toggle writes power commands via Active', async t => {
   assert.equal(await c.handleGetRequest(), 0);
   await c.handleSetRequest(1);
   assert.deepEqual(sent, [{ operation: { dehumidifierOperationMode: 'POWER_ON' } }]);
+});
+test('basic mode shows the device target humidity read-only, so the tile reads "Set to 50%"', async t => {
+  const { device, accessory } = setup(profile(), { basicSwitch: true }); t.after(() => device.stop());
+  await device.refresh();
+  const c = accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main')
+    .getCharacteristic(hap.Characteristic.RelativeHumidityDehumidifierThreshold);
+  assert.equal(await c.handleGetRequest(), 50);
+  assert.equal(c.value, 50); // pushed by refresh, so Home is notified without polling
+  // Readable and notifying, but not writable: the HAP server answers any write with READ_ONLY_CHARACTERISTIC.
+  assert.ok(c.props.perms.includes(hap.Perms.PAIRED_READ));
+  assert.ok(c.props.perms.includes(hap.Perms.NOTIFY));
+  assert.equal(c.props.perms.includes(hap.Perms.PAIRED_WRITE), false);
+  assert.deepEqual([c.props.minValue, c.props.maxValue, c.props.minStep], [30, 70, 5]);
+});
+test('switching from basic back to full mode makes the cached read-only target writable again', async t => {
+  const basic = setup(profile(), { basicSwitch: true }); t.after(() => basic.device.stop());
+  const full = new Device({ ...basic.platform, config: {} }, basic.accessory, basic.device.info, basic.device.profile);
+  t.after(() => full.stop());
+  const c = basic.accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main')
+    .getCharacteristic(hap.Characteristic.RelativeHumidityDehumidifierThreshold);
+  assert.ok(c.props.perms.includes(hap.Perms.PAIRED_WRITE));
+  const sent = []; full.platform.client.control = async (_id, payload) => sent.push(payload);
+  await full.refresh();
+  await c.handleSetRequest(55);
+  assert.deepEqual(sent, [{ humidity: { targetHumidity: 55 } }]);
+});
+test('switching from full to basic mode drops the cached fan slider from the main tile', t => {
+  const full = setup(); t.after(() => full.device.stop());
+  const main = full.accessory.getServiceById(hap.Service.HumidifierDehumidifier, 'main');
+  assert.equal(main.testCharacteristic(hap.Characteristic.RotationSpeed), true);
+  const basic = new Device({ ...full.platform, config: { basicSwitch: true } }, full.accessory, full.device.info, full.device.profile);
+  t.after(() => basic.stop());
+  assert.equal(main.testCharacteristic(hap.Characteristic.RotationSpeed), false);
+  const c = main.getCharacteristic(hap.Characteristic.RelativeHumidityDehumidifierThreshold);
+  assert.equal(c.props.perms.includes(hap.Perms.PAIRED_WRITE), false);
 });
 test('basic mode still honours showHumiditySensor and waterFullSensor:none', t => {
   const { device, accessory } = setup(profile(), { basicSwitch: true, showHumiditySensor: false, waterFullSensor: 'none' }); t.after(() => device.stop());
